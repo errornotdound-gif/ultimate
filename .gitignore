@@ -1,6 +1,7 @@
 logs/
 *.log
-vendor/
-composer.lock
 .env
 .DS_Store
+Thumbs.db
+*.tmp
+senders.txt

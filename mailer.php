@@ -2,13 +2,6 @@
 
 declare(strict_types=1);
 
-// ============================================
-// RAILWAY MAILER ULTIMATE - INTERFACE PURE
-// ============================================
-// Envoi d'emails directement depuis l'interface
-// Pas de fichier targets.txt requis
-// ============================================
-
 error_reporting(0);
 ini_set('display_errors', 0);
 ini_set('max_execution_time', 0);
@@ -60,8 +53,7 @@ class RailwayMailerUltimate
             'reply_to' => 'noreply@railway.local',
             'delay_between' => 0.3,
             'max_retries' => 3,
-            'spoof_headers' => true,
-            'rotate_ip' => true
+            'spoof_headers' => true
         ];
 
         if (file_exists('.env')) {
@@ -82,11 +74,18 @@ class RailwayMailerUltimate
     {
         $this->availableSenders = [];
         
-        // Senders depuis le serveur Railway
-        $serverSenders = $this->grabServerSenders();
-        $this->availableSenders = array_merge($this->availableSenders, $serverSenders);
+        $host = $_SERVER['HTTP_HOST'] ?? 'railway.local';
+        
+        $this->availableSenders = [
+            ['email' => "system@$host", 'name' => 'System'],
+            ['email' => "admin@$host", 'name' => 'Admin'],
+            ['email' => "noreply@$host", 'name' => 'No Reply'],
+            ['email' => "support@$host", 'name' => 'Support'],
+            ['email' => "info@$host", 'name' => 'Info'],
+            ['email' => "mailer@$host", 'name' => 'Mailer'],
+            ['email' => "web@$host", 'name' => 'Web Server']
+        ];
 
-        // Senders depuis senders.txt
         if (file_exists('senders.txt')) {
             $lines = file('senders.txt', FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
             foreach ($lines as $line) {
@@ -100,99 +99,9 @@ class RailwayMailerUltimate
             }
         }
 
-        // Senders par défaut
-        if (empty($this->availableSenders)) {
-            $host = $_SERVER['HTTP_HOST'] ?? 'railway.local';
-            $this->availableSenders = [
-                ['email' => "system@$host", 'name' => 'System'],
-                ['email' => "admin@$host", 'name' => 'Admin'],
-                ['email' => "noreply@$host", 'name' => 'No Reply'],
-                ['email' => "support@$host", 'name' => 'Support'],
-                ['email' => "info@$host", 'name' => 'Info'],
-                ['email' => "mailer@$host", 'name' => 'Mailer'],
-                ['email' => "web@$host", 'name' => 'Web Server']
-            ];
-        }
-
         $this->selectedSender = $this->availableSenders[0]['email'] ?? '';
         $this->fromEmail = $this->selectedSender;
         $this->fromName = $this->availableSenders[0]['name'] ?? 'System';
-    }
-
-    private function grabServerSenders()
-    {
-        $senders = [];
-        
-        // Variables serveur
-        $serverEmails = [
-            $_SERVER['SERVER_ADMIN'] ?? null,
-            $_SERVER['SERVER_EMAIL'] ?? null,
-            $_ENV['EMAIL'] ?? null,
-            $_ENV['MAILER_EMAIL'] ?? null,
-            getenv('EMAIL'),
-            getenv('MAILER_EMAIL'),
-            $_ENV['SMTP_USERNAME'] ?? null,
-            getenv('SMTP_USERNAME')
-        ];
-        
-        foreach ($serverEmails as $email) {
-            if ($email && filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                $senders[] = [
-                    'email' => $email,
-                    'name' => explode('@', $email)[0]
-                ];
-            }
-        }
-
-        // Hostname
-        $hostname = gethostname() ?: ($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $senders[] = ['email' => "system@$hostname", 'name' => 'System'];
-        $senders[] = ['email' => "admin@$hostname", 'name' => 'Admin'];
-        $senders[] = ['email' => "noreply@$hostname", 'name' => 'NoReply'];
-        $senders[] = ['email' => "mailer@$hostname", 'name' => 'Mailer'];
-
-        // Variables Railway
-        $railwayVars = [
-            'RAILWAY_SERVICE_ID',
-            'RAILWAY_ENVIRONMENT_NAME',
-            'RAILWAY_SERVICE_NAME',
-            'RAILWAY_PROJECT_ID'
-        ];
-        
-        foreach ($railwayVars as $var) {
-            $value = getenv($var) ?? $_ENV[$var] ?? null;
-            if ($value) {
-                $senders[] = [
-                    'email' => strtolower($var) . "@$hostname",
-                    'name' => 'Railway ' . str_replace('_', ' ', $var)
-                ];
-            }
-        }
-
-        // Docker
-        $dockerVars = ['DOCKER_HOST', 'DOCKER_CONTAINER_ID'];
-        foreach ($dockerVars as $var) {
-            $value = getenv($var) ?? $_ENV[$var] ?? null;
-            if ($value) {
-                $senders[] = [
-                    'email' => "docker@$hostname",
-                    'name' => 'Docker Service'
-                ];
-            }
-        }
-
-        // Dédupliquer
-        $uniqueSenders = [];
-        $seen = [];
-        foreach ($senders as $sender) {
-            $key = $sender['email'];
-            if (!isset($seen[$key])) {
-                $seen[$key] = true;
-                $uniqueSenders[] = $sender;
-            }
-        }
-
-        return $uniqueSenders;
     }
 
     private function initLog()
@@ -228,21 +137,12 @@ class RailwayMailerUltimate
             'Reply-To: ' . ($this->replyTo ?: $this->fromEmail),
             'Return-Path: ' . $this->fromEmail,
             'X-Mailer: PHP/' . phpversion(),
-            'X-Priority: 3',
-            'X-MSMail-Priority: Normal',
-            'Importance: Normal'
+            'X-Priority: 3'
         ];
 
         if ($this->config['spoof_headers']) {
-            $headers[] = 'Message-ID: <' . uniqid() . '.' . md5(rand()) . '@' . ($_SERVER['HTTP_HOST'] ?? 'railway.local') . '>';
+            $headers[] = 'Message-ID: <' . uniqid() . '@' . ($_SERVER['HTTP_HOST'] ?? 'railway.local') . '>';
             $headers[] = 'X-Originating-IP: ' . $this->getRandomIP();
-            $userAgents = [
-                'Microsoft Outlook 16.0',
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'AppleMail (Mac OS X)',
-                'Thunderbird/91.0'
-            ];
-            $headers[] = 'X-Mailer: ' . $userAgents[array_rand($userAgents)];
         }
 
         return implode("\r\n", $headers) . "\r\n";
@@ -253,24 +153,14 @@ class RailwayMailerUltimate
         $subjects = [
             'Welcome to our platform!',
             'Your account has been activated',
-            'Important update regarding your subscription',
+            'Important update',
             'We miss you!',
-            'Exclusive offer just for you',
+            'Exclusive offer for you',
             'Your order confirmation',
-            'Security alert: New login detected',
+            'Security alert',
             'Your verification code',
-            'Account recovery instructions',
-            'Special promotion inside',
-            'Your invoice is ready',
-            'New message from support',
-            'Your password has been reset',
-            'Confirm your email address',
-            'Your profile has been updated',
-            'Exciting news awaits!',
-            'You\'ve been selected',
-            'Limited time offer',
-            'Your feedback matters',
-            'We\'re thinking of you'
+            'Account recovery',
+            'Special promotion'
         ];
         return $subjects[array_rand($subjects)] . ' #' . $this->getRandomString(6);
     }
@@ -308,9 +198,6 @@ class RailwayMailerUltimate
             <style>
                 body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .header { background: #f8f9fa; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-                .content { padding: 20px 0; }
-                .footer { border-top: 1px solid #ddd; padding-top: 20px; font-size: 12px; color: #666; text-align: center; }
             </style>
         </head>
         <body>
@@ -344,7 +231,6 @@ class RailwayMailerUltimate
                 <div class="header"><h1>Bonjour ' . htmlspecialchars($name) . '!</h1></div>
                 <div class="content">
                     <p style="font-size: 16px;">Nous sommes ravis de vous compter parmi nos utilisateurs.</p>
-                    <p style="font-size: 16px;">Pour en savoir plus :</p>
                     <p style="text-align: center; margin: 30px 0;">
                         <a href="' . $link . '" class="button">Découvrir</a>
                     </p>
@@ -417,7 +303,6 @@ class RailwayMailerUltimate
 
         $this->log("📨 Sending to $total recipients");
         $this->log("📊 Sender: {$this->fromEmail} ({$this->fromName})");
-        $this->log("📊 Type: " . strtoupper($this->bodyType));
 
         foreach ($recipients as $index => $recipient) {
             $success = $this->sendEmailWithRetry($recipient);
@@ -474,7 +359,7 @@ class RailwayMailerUltimate
         $report = "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
         $report .= "📊 FINAL REPORT\n";
         $report .= "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";
-        $report .= "  Total: {$this->stats['sent'] + $this->stats['failed']}\n";
+        $report .= "  Total: " . ($this->stats['sent'] + $this->stats['failed']) . "\n";
         $report .= "  Sent: {$this->stats['sent']}\n";
         $report .= "  Failed: {$this->stats['failed']}\n";
         $report .= "  Rate: " . round(($this->stats['sent'] / max(1, $this->stats['sent'] + $this->stats['failed'])) * 100, 1) . "%\n";
@@ -507,7 +392,6 @@ class RailwayMailerUltimate
             if ($fromName) $this->fromName = $fromName;
             if ($replyTo) $this->replyTo = $replyTo;
 
-            // Parser les destinataires
             $recipients = [];
             $lines = explode("\n", $recipientsText);
             foreach ($lines as $line) {
@@ -559,17 +443,15 @@ class RailwayMailerUltimate
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>🚀 Railway Mailer Ultimate</title>
-            <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
             <style>
                 * { margin: 0; padding: 0; box-sizing: border-box; }
                 body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0a0e17; color: #e0e0e0; min-height: 100vh; padding: 20px; }
-                .container { max-width: 1400px; margin: 0 auto; }
-                
+                .container { max-width: 1200px; margin: 0 auto; }
                 .header {
                     background: linear-gradient(135deg, #0d1b2a, #1b263b);
                     border: 1px solid #1a3a5c;
                     border-radius: 15px;
-                    padding: 25px 30px;
+                    padding: 20px 25px;
                     margin-bottom: 30px;
                     display: flex;
                     justify-content: space-between;
@@ -577,35 +459,16 @@ class RailwayMailerUltimate
                     flex-wrap: wrap;
                     gap: 15px;
                 }
-                .header h1 {
-                    font-size: 2rem;
-                    background: linear-gradient(135deg, #00d4ff, #7b2ffc);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                }
-                .header h1 span { font-size: 0.8rem; background: rgba(0,212,255,0.1); -webkit-text-fill-color: #00d4ff; padding: 3px 12px; border-radius: 20px; border: 1px solid rgba(0,212,255,0.2); }
+                .header h1 { font-size: 1.8rem; background: linear-gradient(135deg, #00d4ff, #7b2ffc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
                 .status-badge { display: flex; align-items: center; gap: 10px; padding: 8px 18px; background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.2); border-radius: 30px; font-size: 0.85rem; }
                 .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #00ff41; animation: blink 1s infinite; }
                 @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-                
                 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
                 .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-                
-                .card {
-                    background: #111927;
-                    border: 1px solid #1a2a3a;
-                    border-radius: 12px;
-                    padding: 20px;
-                    transition: all 0.3s;
-                }
-                .card:hover { border-color: #00d4ff; box-shadow: 0 0 30px rgba(0,212,255,0.05); }
-                .card-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #6b8baa; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+                .card { background: #111927; border: 1px solid #1a2a3a; border-radius: 12px; padding: 20px; transition: all 0.3s; }
+                .card:hover { border-color: #00d4ff; }
+                .card-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: #6b8baa; margin-bottom: 12px; }
                 .stat-number { font-size: 2.2rem; font-weight: 700; background: linear-gradient(135deg, #00d4ff, #7b2ffc); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-                .stat-sub { font-size: 0.8rem; color: #6b8baa; margin-top: 5px; }
-                
                 .form-group { margin-bottom: 14px; }
                 .form-group label { display: block; font-size: 0.8rem; color: #8aadc8; margin-bottom: 4px; font-weight: 500; }
                 .form-control {
@@ -613,25 +476,18 @@ class RailwayMailerUltimate
                     border-radius: 8px; color: #e0e0e0; font-size: 0.9rem; transition: all 0.3s;
                     font-family: 'Segoe UI', system-ui, sans-serif;
                 }
-                .form-control:focus { outline: none; border-color: #00d4ff; box-shadow: 0 0 20px rgba(0,212,255,0.1); }
-                .form-control::placeholder { color: #4a6a8a; }
+                .form-control:focus { outline: none; border-color: #00d4ff; }
                 textarea.form-control { min-height: 120px; resize: vertical; font-family: 'Consolas', monospace; font-size: 0.85rem; }
-                select.form-control { cursor: pointer; }
-                select.form-control option { background: #0d1b2a; }
                 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-                
                 .btn {
                     padding: 11px 25px; border: none; border-radius: 8px; font-size: 0.95rem;
                     font-weight: 600; cursor: pointer; transition: all 0.3s;
-                    display: inline-flex; align-items: center; gap: 8px;
                     font-family: 'Segoe UI', system-ui, sans-serif;
                 }
                 .btn-primary { background: linear-gradient(135deg, #00d4ff, #7b2ffc); color: white; width: 100%; justify-content: center; }
                 .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,212,255,0.3); }
                 .btn-success { background: linear-gradient(135deg, #00c853, #00e676); color: white; }
-                .btn-success:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(0,200,83,0.3); }
                 .btn-sm { padding: 6px 14px; font-size: 0.8rem; }
-                
                 .log-container {
                     background: #0a0e17; border: 1px solid #1a2a3a; border-radius: 8px;
                     height: 280px; overflow-y: auto; padding: 10px;
@@ -645,61 +501,38 @@ class RailwayMailerUltimate
                 .log-success .log-message { color: #00e676; }
                 .log-error .log-message { color: #ff1744; }
                 .log-info .log-message { color: #00d4ff; }
-                .log-empty { color: #4a6a8a; text-align: center; padding: 40px; }
-                
                 .full-width { grid-column: 1 / -1; }
                 .fade-in { animation: fadeIn 0.5s; }
                 @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-                
-                @media (max-width: 1024px) { .grid { grid-template-columns: 1fr; } .grid-3 { grid-template-columns: 1fr 1fr; } .form-row { grid-template-columns: 1fr; } }
-                @media (max-width: 600px) { .grid-3 { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; } .header h1 { font-size: 1.3rem; } }
-                
+                @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } .grid-3 { grid-template-columns: 1fr; } .form-row { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; } }
                 .tag { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.65rem; font-weight: 600; text-transform: uppercase; }
                 .tag-html { background: rgba(255,107,53,0.2); color: #ff6b35; }
                 .tag-txt { background: rgba(0,200,83,0.2); color: #00c853; }
-                
-                .quick-template {
-                    display: inline-block; padding: 4px 12px; margin: 3px;
-                    background: rgba(0,212,255,0.05); border: 1px solid #1a3a5c;
-                    border-radius: 15px; font-size: 0.7rem; color: #8aadc8;
-                    cursor: pointer; transition: all 0.3s;
-                }
+                .quick-template { display: inline-block; padding: 3px 10px; margin: 2px; background: rgba(0,212,255,0.05); border: 1px solid #1a3a5c; border-radius: 12px; font-size: 0.7rem; color: #8aadc8; cursor: pointer; }
                 .quick-template:hover { border-color: #00d4ff; color: #00d4ff; }
+                .footer { text-align: center; padding: 20px; color: #2a4a6a; font-size: 0.7rem; border-top: 1px solid #1a2a3a; margin-top: 30px; }
             </style>
         </head>
         <body>
             <div class="container">
-                <!-- HEADER -->
                 <div class="header fade-in">
-                    <h1>🚀 Railway Mailer <span>v4.0</span></h1>
+                    <h1>🚀 Railway Mailer <span style="font-size:0.8rem;background:rgba(0,212,255,0.1);-webkit-text-fill-color:#00d4ff;padding:3px 12px;border-radius:20px;border:1px solid rgba(0,212,255,0.2);">v4.0</span></h1>
                     <div class="status-badge">
                         <span class="status-dot"></span>
-                        <span style="color:#00d4ff;">SYSTEM ACTIVE</span>
+                        <span style="color:#00d4ff;">ACTIVE</span>
                         <span style="color:#4a6a8a;margin-left:10px;">|</span>
                         <span style="color:#6b8baa;"><?= $this->smtpHost ?>:<?= $this->smtpPort ?></span>
                     </div>
                 </div>
 
-                <!-- STATS -->
                 <div class="grid-3 fade-in">
-                    <div class="card">
-                        <div class="card-title">📊 Total</div>
-                        <div class="stat-number"><?= $stats['sent'] + $stats['failed'] ?></div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">✅ Sent</div>
-                        <div class="stat-number" style="background:linear-gradient(135deg,#00c853,#00e676);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"><?= $stats['sent'] ?></div>
-                    </div>
-                    <div class="card">
-                        <div class="card-title">❌ Failed</div>
-                        <div class="stat-number" style="background:linear-gradient(135deg,#d50000,#ff1744);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"><?= $stats['failed'] ?></div>
-                    </div>
+                    <div class="card"><div class="card-title">📊 Total</div><div class="stat-number"><?= $stats['sent'] + $stats['failed'] ?></div></div>
+                    <div class="card"><div class="card-title">✅ Sent</div><div class="stat-number" style="background:linear-gradient(135deg,#00c853,#00e676);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"><?= $stats['sent'] ?></div></div>
+                    <div class="card"><div class="card-title">❌ Failed</div><div class="stat-number" style="background:linear-gradient(135deg,#d50000,#ff1744);-webkit-background-clip:text;-webkit-text-fill-color:transparent;"><?= $stats['failed'] ?></div></div>
                 </div>
 
-                <!-- MAIN FORM -->
                 <form method="POST" class="fade-in">
                     <div class="grid">
-                        <!-- LEFT -->
                         <div>
                             <div class="card">
                                 <div class="card-title">📧 Sender</div>
@@ -714,33 +547,22 @@ class RailwayMailerUltimate
                                     </select>
                                 </div>
                                 <div class="form-row">
-                                    <div class="form-group">
-                                        <label>From Name</label>
-                                        <input type="text" name="from_name" class="form-control" value="<?= htmlspecialchars($this->fromName) ?>" placeholder="Name">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Reply-To</label>
-                                        <input type="email" name="reply_to" class="form-control" value="<?= htmlspecialchars($this->replyTo) ?>" placeholder="Reply-To">
-                                    </div>
+                                    <div class="form-group"><label>From Name</label><input type="text" name="from_name" class="form-control" value="<?= htmlspecialchars($this->fromName) ?>" placeholder="Name"></div>
+                                    <div class="form-group"><label>Reply-To</label><input type="email" name="reply_to" class="form-control" value="<?= htmlspecialchars($this->replyTo) ?>" placeholder="Reply-To"></div>
                                 </div>
                             </div>
 
                             <div class="card" style="margin-top:20px;">
                                 <div class="card-title">✏️ Content</div>
-                                <div class="form-group">
-                                    <label>Subject</label>
-                                    <input type="text" name="subject" class="form-control" placeholder="Subject (leave empty for random)" value="<?= htmlspecialchars($this->subject) ?>">
-                                </div>
-                                <div class="form-group">
-                                    <label>Body Type</label>
+                                <div class="form-group"><label>Subject</label><input type="text" name="subject" class="form-control" placeholder="Subject (leave empty for random)" value="<?= htmlspecialchars($this->subject) ?>"></div>
+                                <div class="form-group"><label>Body Type</label>
                                     <select name="body_type" class="form-control">
                                         <option value="html" <?= $this->bodyType === 'html' ? 'selected' : '' ?>>HTML</option>
                                         <option value="txt" <?= $this->bodyType === 'txt' ? 'selected' : '' ?>>Plain Text</option>
                                     </select>
                                 </div>
-                                <div class="form-group">
-                                    <label>Body</label>
-                                    <textarea name="body" class="form-control" style="min-height:180px;" placeholder="Email body - Variables: {name} {email} {date} {time} {link}"><?= htmlspecialchars($this->body) ?></textarea>
+                                <div class="form-group"><label>Body</label>
+                                    <textarea name="body" class="form-control" style="min-height:180px;" placeholder="Variables: {name} {email} {date} {time} {link}"><?= htmlspecialchars($this->body) ?></textarea>
                                     <div style="font-size:0.7rem;color:#4a6a8a;margin-top:5px;">
                                         Templates: 
                                         <span class="quick-template" onclick="document.querySelector('textarea[name=body]').value='Bonjour {name},\n\nMerci de votre inscription.\n\nCordialement';">Simple</span>
@@ -751,7 +573,6 @@ class RailwayMailerUltimate
                             </div>
                         </div>
 
-                        <!-- RIGHT -->
                         <div>
                             <div class="card">
                                 <div class="card-title">👥 Recipients</div>
@@ -767,12 +588,8 @@ class RailwayMailerUltimate
                             <div class="card" style="margin-top:20px;">
                                 <div class="card-title">➕ Add Sender</div>
                                 <div class="form-row">
-                                    <div class="form-group">
-                                        <input type="email" name="sender_email" class="form-control" placeholder="Email">
-                                    </div>
-                                    <div class="form-group">
-                                        <input type="text" name="sender_name" class="form-control" placeholder="Name">
-                                    </div>
+                                    <div class="form-group"><input type="email" name="sender_email" class="form-control" placeholder="Email"></div>
+                                    <div class="form-group"><input type="text" name="sender_name" class="form-control" placeholder="Name"></div>
                                 </div>
                                 <button type="submit" name="action" value="add_sender" class="btn btn-success btn-sm">Add Sender</button>
                             </div>
@@ -780,12 +597,11 @@ class RailwayMailerUltimate
                     </div>
                 </form>
 
-                <!-- LOGS -->
                 <div class="card full-width fade-in">
                     <div class="card-title">📋 Logs <span style="margin-left:auto;font-size:0.7rem;color:#4a6a8a;"><?= count($logs) ?> entries</span></div>
                     <div class="log-container" id="logContainer">
                         <?php if (empty($logs)): ?>
-                            <div class="log-empty">⏳ Waiting for activity...</div>
+                            <div style="color:#4a6a8a;text-align:center;padding:40px;">⏳ Waiting for activity...</div>
                         <?php else: ?>
                             <?php foreach ($logs as $log): ?>
                                 <div class="log-entry log-<?= $log['type'] ?>">
@@ -797,29 +613,22 @@ class RailwayMailerUltimate
                     </div>
                 </div>
 
-                <div style="text-align:center;padding:20px;color:#2a4a6a;font-size:0.7rem;border-top:1px solid #1a2a3a;margin-top:30px;">
-                    ⚡ Railway Mailer v4.0 | <?= count($this->availableSenders) ?> senders | SMTP: <?= $this->smtpHost ?>:<?= $this->smtpPort ?>
-                </div>
+                <div class="footer">⚡ Railway Mailer v4.0 | <?= count($this->availableSenders) ?> senders | SMTP: <?= $this->smtpHost ?>:<?= $this->smtpPort ?></div>
             </div>
 
             <script>
                 const logContainer = document.getElementById('logContainer');
                 if (logContainer) logContainer.scrollTop = logContainer.scrollHeight;
-
-                // Auto-refresh logs toutes les 3 secondes
                 setInterval(() => {
-                    fetch(window.location.href)
-                        .then(r => r.text())
-                        .then(html => {
-                            const parser = new DOMParser();
-                            const doc = parser.parseFromString(html, 'text/html');
-                            const newLogs = doc.getElementById('logContainer');
-                            if (newLogs && logContainer) {
-                                logContainer.innerHTML = newLogs.innerHTML;
-                                logContainer.scrollTop = logContainer.scrollHeight;
-                            }
-                        })
-                        .catch(() => {});
+                    fetch(window.location.href).then(r => r.text()).then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newLogs = doc.getElementById('logContainer');
+                        if (newLogs && logContainer) {
+                            logContainer.innerHTML = newLogs.innerHTML;
+                            logContainer.scrollTop = logContainer.scrollHeight;
+                        }
+                    }).catch(() => {});
                 }, 3000);
             </script>
         </body>
@@ -828,21 +637,12 @@ class RailwayMailerUltimate
     }
 }
 
-// ============================================
-// BOOTSTRAP
-// ============================================
-
 session_start();
 $mailer = new RailwayMailerUltimate();
 
 if (php_sapi_name() !== 'cli') {
     $mailer->webHandler();
 } else {
-    if (isset($argv[1]) && $argv[1] === '--daemon') {
-        echo "\n🚀 Daemon mode...\n";
-        while (true) { sleep(300); }
-    } else {
-        echo "\n✅ Railway Mailer Ultimate v4.0\n";
-        echo "🌐 Interface web disponible sur le port 8080\n";
-    }
+    echo "\n✅ Railway Mailer Ultimate v4.0\n";
+    echo "🌐 Interface web disponible\n";
 }

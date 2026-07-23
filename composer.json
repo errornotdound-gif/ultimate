@@ -1,9 +1,0 @@
-{
-    "name": "railway/mailer-ultimate",
-    "description": "Railway Mailer Ultimate",
-    "type": "project",
-    "license": "MIT",
-    "require": {
-        "php": ">=7.4"
-    }
-}
