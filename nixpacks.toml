@@ -2,7 +2,13 @@
 nixPkgs = ["php", "phpExtensions.fileinfo", "phpExtensions.mbstring"]
 
 [phases.install]
-cmds = ["composer install --no-dev --optimize-autoloader", "mkdir -p logs"]
+cmds = [
+    "php -r \"copy('https://getcomposer.org/installer', 'composer-setup.php');\"",
+    "php composer-setup.php --install-dir=/usr/local/bin --filename=composer",
+    "php -r \"unlink('composer-setup.php');\"",
+    "composer install --no-dev --optimize-autoloader",
+    "mkdir -p logs"
+]
 
 [start]
-cmd = "php mailer.php"
+cmd = "php -S 0.0.0.0:8080 mailer.php"

@@ -1,12 +1,9 @@
 {
     "name": "railway/mailer-ultimate",
-    "description": "Railway Mailer Ultimate - Interface Pure",
+    "description": "Railway Mailer Ultimate",
     "type": "project",
     "license": "MIT",
     "require": {
         "php": ">=7.4"
-    },
-    "scripts": {
-        "start": "php -S 0.0.0.0:8080 mailer.php"
     }
 }
