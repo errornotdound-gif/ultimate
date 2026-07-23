@@ -7,8 +7,9 @@
   "deploy": {
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE",
-    "startCommand": "php mailer.php",
+    "startCommand": "php -S 0.0.0.0:8080 mailer.php",
     "healthcheckPath": "/",
-    "healthcheckTimeout": 100
+    "healthcheckTimeout": 300,
+    "healthcheckInterval": 60
   }
 }

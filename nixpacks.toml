@@ -5,4 +5,4 @@ nixPkgs = ["php"]
 cmds = ["mkdir -p logs"]
 
 [start]
-cmd = "php mailer.php"
+cmd = "php -S 0.0.0.0:8080 mailer.php"
