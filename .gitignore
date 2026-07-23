@@ -1,0 +1,6 @@
+logs/
+*.log
+vendor/
+composer.lock
+.env
+.DS_Store
