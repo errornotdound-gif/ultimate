@@ -1,8 +1,0 @@
-[phases.setup]
-nixPkgs = ["php", "phpExtensions.fileinfo", "phpExtensions.mbstring"]
-
-[phases.install]
-cmds = ["composer install --no-dev --optimize-autoloader", "mkdir -p logs"]
-
-[start]
-cmd = "php mailer.php"
